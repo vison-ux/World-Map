@@ -46,6 +46,7 @@
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 
   <script>
+    // Define score and colors for statuses
     const scoreValues = {
       "Lived here": 5,
       "Extensively visited": 4,
@@ -64,7 +65,7 @@
       "Never been here": "white",
     };
 
-    const countryStatus = {};
+    const countryStatus = {}; // countryCode => status
     let totalScore = 0;
 
     const map = L.map("map").setView([20, 0], 2);
@@ -115,6 +116,7 @@
       return container;
     }
 
+    // Load GeoJSON and add to map
     axios
       .get(
         "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson"
@@ -129,18 +131,29 @@
           },
           onEachFeature: (feature, layer) => {
             const countryCode = feature.properties.ISO_A3;
-            const countryName = feature.properties.NAME || "Unknown";
+
+            // Check what properties exist
+            // Uncomment for debugging:
+            // console.log(feature.properties);
+
+            const countryName =
+              feature.properties.NAME ||
+              feature.properties.ADMIN ||
+              "Unknown";
+
+            // Initialize status
             countryStatus[countryCode] = "Never been here";
 
-            layer.on("click", () => {
+            layer.on("click", (e) => {
               const popupDiv = L.DomUtil.create("div");
               popupDiv.innerHTML = `<strong>${countryName}</strong><br/>`;
 
               const radioOptions = createRadioOptions(countryCode, layer);
               popupDiv.appendChild(radioOptions);
 
+              // Open popup at click location (e.latlng)
               const popup = L.popup()
-                .setLatLng(layer.getBounds().getCenter())
+                .setLatLng(e.latlng)
                 .setContent(popupDiv);
 
               map.openPopup(popup);
