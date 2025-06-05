@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Interactive Travel Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    #score {
+      padding: 10px;
+      font-size: 20px;
+      text-align: center;
+      background: #f8f8f8;
+      border-bottom: 1px solid #ccc;
+    }
+    #map {
+      flex-grow: 1;
+    }
+    .leaflet-popup-content {
+      text-align: center;
+    }
+    select {
+      margin-top: 5px;
+      padding: 4px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div id="score">Your Travel Score: <span id="score-value">0</span></div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+
+  <script>
+    const scoreValues = {
+      "Lived here": 5,
+      "Extensively visited": 4,
+      "Stayed here": 3,
+      "Visited here": 2,
+      "Passed here": 1,
+      "Never been here": 0
+    };
+
+    const colors = {
+      "Lived here": "red",
+      "Extensively visited": "orange",
+      "Stayed here": "yellow",
+      "Visited here": "green",
+      "Passed here": "blue",
+      "Never been here": "white"
+    };
+
+    const countryStatus = {}; // { countryCode: status }
+    let totalScore = 0;
+
+    const map = L.map('map').setView([20, 0], 2);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    function updateScore() {
+      totalScore = Object.values(countryStatus).reduce((acc, status) => acc + scoreValues[status], 0);
+      document.getElementById('score-value').textContent = totalScore;
+    }
+
+    function createDropdown(countryCode, layer) {
+      const select = document.createElement('select');
+      for (const status in colors) {
+        const option = document.createElement('option');
+        option.value = status;
+        option.textContent = status;
+        select.appendChild(option);
+      }
+
+      select.value = "Never been here";
+
+      select.onchange = () => {
+        const status = select.value;
+        countryStatus[countryCode] = status;
+        layer.setStyle({ fillColor: colors[status], fillOpacity: 0.8, color: "#444", weight: 1 });
+        updateScore();
+      };
+
+      return select;
+    }
+
+    // Load GeoJSON for country borders
+    axios.get('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
+      .then(response => {
+        const geojson = L.geoJSON(response.data, {
+          style: {
+            color: "#444",
+            weight: 1,
+            fillColor: "white",
+            fillOpacity: 0.8
+          },
+          onEachFeature: (feature, layer) => {
+            const countryCode = feature.properties.ISO_A3;
+            countryStatus[countryCode] = "Never been here";
+            const dropdown = createDropdown(countryCode, layer);
+
+            layer.bindPopup(`${feature.properties.ADMIN}<br/>`, { closeButton: false });
+            layer.on('click', () => {
+              layer.bindPopup(`${feature.properties.ADMIN}<br/>`).openPopup();
+              setTimeout(() => {
+                const popupContent = layer.getPopup().getContentNode();
+                popupContent.appendChild(dropdown);
+              }, 0);
+            });
+          }
+        }).addTo(map);
+      });
+  </script>
+</body>
+</html>
