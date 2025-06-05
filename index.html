@@ -1,10 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Interactive Travel Map</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
   <style>
     body {
       margin: 0;
@@ -27,6 +30,7 @@
       margin-top: 5px;
       padding: 4px;
       font-size: 14px;
+      width: 130px;
     }
   </style>
 </head>
@@ -44,7 +48,7 @@
       "Stayed here": 3,
       "Visited here": 2,
       "Passed here": 1,
-      "Never been here": 0
+      "Never been here": 0,
     };
 
     const colors = {
@@ -53,70 +57,87 @@
       "Stayed here": "yellow",
       "Visited here": "green",
       "Passed here": "blue",
-      "Never been here": "white"
+      "Never been here": "white",
     };
 
     const countryStatus = {};
     let totalScore = 0;
 
-    const map = L.map('map').setView([20, 0], 2);
+    const map = L.map("map").setView([20, 0], 2);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors",
     }).addTo(map);
 
     function updateScore() {
-      totalScore = Object.values(countryStatus).reduce((acc, status) => acc + scoreValues[status], 0);
-      document.getElementById('score-value').textContent = totalScore;
+      totalScore = Object.values(countryStatus).reduce(
+        (acc, status) => acc + scoreValues[status],
+        0
+      );
+      document.getElementById("score-value").textContent = totalScore;
     }
 
     function createDropdown(countryCode, layer) {
-      const select = document.createElement('select');
+      const select = document.createElement("select");
+
       for (const status in colors) {
-        const option = document.createElement('option');
+        const option = document.createElement("option");
         option.value = status;
         option.textContent = status;
         select.appendChild(option);
       }
 
-      select.value = "Never been here";
+      select.value = countryStatus[countryCode] || "Never been here";
 
       select.onchange = () => {
         const status = select.value;
         countryStatus[countryCode] = status;
-        layer.setStyle({ fillColor: colors[status], fillOpacity: 0.8, color: "#444", weight: 1 });
+        layer.setStyle({
+          fillColor: colors[status],
+          fillOpacity: 0.8,
+          color: "#444",
+          weight: 1,
+        });
         updateScore();
       };
 
       return select;
     }
 
-    axios.get('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
-      .then(response => {
+    axios
+      .get(
+        "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson"
+      )
+      .then((response) => {
         const geojson = L.geoJSON(response.data, {
           style: {
             color: "#444",
             weight: 1,
             fillColor: "white",
-            fillOpacity: 0.8
+            fillOpacity: 0.8,
           },
           onEachFeature: (feature, layer) => {
             const countryCode = feature.properties.ISO_A3;
             const countryName = feature.properties.ADMIN || "Unknown";
             countryStatus[countryCode] = "Never been here";
 
-            layer.on('click', () => {
-              const container = document.createElement('div');
-              const label = document.createElement('div');
-              label.textContent = `${countryName}`;
-              container.appendChild(label);
-              container.appendChild(createDropdown(countryCode, layer));
-              layer.bindPopup(container).openPopup();
+            layer.on("click", () => {
+              const popupDiv = L.DomUtil.create("div");
+              popupDiv.innerHTML = `<strong>${countryName}</strong><br/>`;
+
+              const dropdown = createDropdown(countryCode, layer);
+              popupDiv.appendChild(dropdown);
+
+              const popup = L.popup()
+                .setLatLng(layer.getBounds().getCenter())
+                .setContent(popupDiv);
+
+              map.openPopup(popup);
             });
-          }
+          },
         }).addTo(map);
       })
-      .catch(error => {
+      .catch((error) => {
         console.error("Failed to load country data:", error);
       });
   </script>
