@@ -6,142 +6,133 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-    #score {
-      padding: 10px;
-      font-size: 20px;
-      text-align: center;
-      background: #f0f0f0;
-      border-bottom: 1px solid #ccc;
-    }
-    #map {
-      flex-grow: 1;
-    }
-    label {
-      display: block;
-      margin: 4px 0;
-      font-size: 14px;
-    }
-    input[type="radio"] {
-      margin-right: 5px;
-    }
+    body { margin: 0; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
+    #score { background: #f0f0f0; padding: 10px; text-align: center; font-size: 18px; border-bottom: 1px solid #ccc; }
+    #map { flex-grow: 1; }
+    label { display: block; font-size: 14px; margin: 3px 0; }
+    input[type="radio"] { margin-right: 6px; }
   </style>
 </head>
 <body>
-  <div id="score">Your Travel Score: <span id="score-value">0</span></div>
+  <div id="score">Score: <span id="score-value">0</span></div>
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-
   <script>
-    const scoreValues = {
-      "Lived here": 5,
-      "Extensively visited": 4,
-      "Stayed here": 3,
-      "Visited here": 2,
-      "Passed here": 1,
-      "Never been here": 0,
+    const statusOptions = {
+      "Lived here": { color: "red", points: 5 },
+      "Extensively visited": { color: "orange", points: 4 },
+      "Stayed here": { color: "yellow", points: 3 },
+      "Visited here": { color: "green", points: 2 },
+      "Passed here": { color: "blue", points: 1 },
+      "Never been here": { color: "white", points: 0 },
     };
 
-    const colors = {
-      "Lived here": "red",
-      "Extensively visited": "orange",
-      "Stayed here": "yellow",
-      "Visited here": "green",
-      "Passed here": "blue",
-      "Never been here": "white",
-    };
-
-    const countryStatus = {};
+    const statusByCountry = {};
+    const savedData = new URLSearchParams(window.location.hash.slice(1));
     let map;
 
     function updateScore() {
       let total = 0;
-      for (const key in countryStatus) {
-        total += scoreValues[countryStatus[key]] || 0;
+      for (const code in statusByCountry) {
+        total += statusOptions[statusByCountry[code]].points;
       }
       document.getElementById("score-value").textContent = total;
     }
 
-    function createRadioOptions(countryCode, layer) {
+    function saveToLocalStorage() {
+      localStorage.setItem("travelStatus", JSON.stringify(statusByCountry));
+    }
+
+    function updateURL() {
+      const hash = Object.entries(statusByCountry)
+        .filter(([_, status]) => status !== "Never been here")
+        .map(([code, status]) => `${code}=${encodeURIComponent(status)}`)
+        .join("&");
+      history.replaceState(null, "", `#${hash}`);
+    }
+
+    function createRadioOptions(code, layer) {
       const container = document.createElement("div");
 
-      for (const status in scoreValues) {
+      Object.keys(statusOptions).forEach((status) => {
         const label = document.createElement("label");
-
-        const input = document.createElement("input");
-        input.type = "radio";
-        input.name = `status-${countryCode}`;
-        input.value = status;
-
-        if (countryStatus[countryCode] === status) {
-          input.checked = true;
-        }
-
-        input.addEventListener("change", () => {
-          countryStatus[countryCode] = status;
-          layer.setStyle({
-            fillColor: colors[status],
-            fillOpacity: 0.8,
-            color: "#444",
-            weight: 1,
-          });
+        const radio = document.createElement("input");
+        radio.type = "radio";
+        radio.name = code;
+        radio.value = status;
+        if (statusByCountry[code] === status) radio.checked = true;
+        radio.onchange = () => {
+          statusByCountry[code] = status;
+          layer.setStyle({ fillColor: statusOptions[status].color });
           updateScore();
-        });
-
-        label.appendChild(input);
+          saveToLocalStorage();
+          updateURL();
+        };
+        label.appendChild(radio);
         label.appendChild(document.createTextNode(status));
         container.appendChild(label);
-      }
+      });
 
       return container;
+    }
+
+    function loadFromLocalStorage() {
+      try {
+        const data = JSON.parse(localStorage.getItem("travelStatus") || "{}");
+        Object.assign(statusByCountry, data);
+      } catch (e) {
+        console.warn("Could not load local storage:", e);
+      }
+    }
+
+    function loadFromURL() {
+      savedData.forEach((status, code) => {
+        if (statusOptions[status]) {
+          statusByCountry[code] = status;
+        }
+      });
     }
 
     function initMap() {
       map = L.map("map").setView([20, 0], 2);
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors"
-      }).addTo(map);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 
-      axios.get("https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson")
-        .then(response => {
-          L.geoJSON(response.data, {
-            style: {
-              color: "#444",
-              weight: 1,
-              fillColor: "white",
-              fillOpacity: 0.8,
+      axios
+        .get("https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson")
+        .then((res) => {
+          L.geoJSON(res.data, {
+            style: (feature) => {
+              const code = feature.properties.ISO_A3;
+              const status = statusByCountry[code] || "Never been here";
+              return {
+                color: "#555",
+                weight: 1,
+                fillOpacity: 0.8,
+                fillColor: statusOptions[status].color,
+              };
             },
             onEachFeature: (feature, layer) => {
-              const countryCode = feature.properties.ISO_A3;
-              const countryName = feature.properties.ADMIN || "Unknown";
+              const code = feature.properties.ISO_A3;
+              const name = feature.properties.ADMIN || "Unknown";
+              if (!statusByCountry[code]) statusByCountry[code] = "Never been here";
 
-              countryStatus[countryCode] = "Never been here";
-
-              layer.on("click", function(e) {
+              layer.on("click", (e) => {
                 const popupDiv = document.createElement("div");
-                popupDiv.innerHTML = `<strong>${countryName}</strong><br>`;
-                popupDiv.appendChild(createRadioOptions(countryCode, layer));
-
-                const popup = L.popup()
-                  .setLatLng(e.latlng)
-                  .setContent(popupDiv);
-
-                popup.openOn(map);
+                popupDiv.innerHTML = `<strong>${name}</strong><br>`;
+                popupDiv.appendChild(createRadioOptions(code, layer));
+                L.popup().setLatLng(e.latlng).setContent(popupDiv).openOn(map);
               });
             }
           }).addTo(map);
+          updateScore();
         });
     }
 
+    loadFromLocalStorage();
+    loadFromURL();
     initMap();
   </script>
 </body>
