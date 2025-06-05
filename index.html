@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Interactive Travel Map</title>
+  <title>Travel Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
@@ -11,10 +11,16 @@
     #map { flex-grow: 1; }
     label { display: block; font-size: 14px; margin: 3px 0; }
     input[type="radio"] { margin-right: 6px; }
+    .info { display: flex; justify-content: center; gap: 20px; }
   </style>
 </head>
 <body>
-  <div id="score">Score: <span id="score-value">0</span></div>
+  <div id="score">
+    <div class="info">
+      <span>Score: <span id="score-value">0</span></span>
+      <span>Countries: <span id="country-count">0</span></span>
+    </div>
+  </div>
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -35,10 +41,15 @@
 
     function updateScore() {
       let total = 0;
+      let countryCount = 0;
       for (const code in statusByCountry) {
-        total += statusOptions[statusByCountry[code]].points;
+        const status = statusByCountry[code];
+        const pts = statusOptions[status]?.points || 0;
+        total += pts;
+        if (pts > 0) countryCount++;
       }
       document.getElementById("score-value").textContent = total;
+      document.getElementById("country-count").textContent = countryCount;
     }
 
     function saveToLocalStorage() {
@@ -60,9 +71,10 @@
         const label = document.createElement("label");
         const radio = document.createElement("input");
         radio.type = "radio";
-        radio.name = code;
+        radio.name = `status-${code}`;
         radio.value = status;
-        if (statusByCountry[code] === status) radio.checked = true;
+        radio.checked = (statusByCountry[code] || "Never been here") === status;
+
         radio.onchange = () => {
           statusByCountry[code] = status;
           layer.setStyle({ fillColor: statusOptions[status].color });
@@ -70,6 +82,7 @@
           saveToLocalStorage();
           updateURL();
         };
+
         label.appendChild(radio);
         label.appendChild(document.createTextNode(status));
         container.appendChild(label);
@@ -83,7 +96,7 @@
         const data = JSON.parse(localStorage.getItem("travelStatus") || "{}");
         Object.assign(statusByCountry, data);
       } catch (e) {
-        console.warn("Could not load local storage:", e);
+        console.warn("Could not load from localStorage", e);
       }
     }
 
@@ -116,7 +129,8 @@
             },
             onEachFeature: (feature, layer) => {
               const code = feature.properties.ISO_A3;
-              const name = feature.properties.ADMIN || "Unknown";
+              const name = feature.properties.ADMIN || feature.properties.NAME || "Unknown";
+
               if (!statusByCountry[code]) statusByCountry[code] = "Never been here";
 
               layer.on("click", (e) => {
