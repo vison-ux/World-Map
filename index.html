@@ -26,11 +26,15 @@
     #map {
       flex-grow: 1;
     }
-    select {
-      margin-top: 5px;
-      padding: 4px;
+    label {
+      display: block;
+      cursor: pointer;
+      user-select: none;
+      margin: 4px 0;
       font-size: 14px;
-      width: 130px;
+    }
+    input[type="radio"] {
+      margin-right: 8px;
     }
   </style>
 </head>
@@ -71,37 +75,44 @@
 
     function updateScore() {
       totalScore = Object.values(countryStatus).reduce(
-        (acc, status) => acc + scoreValues[status],
+        (acc, status) => acc + (scoreValues[status] || 0),
         0
       );
       document.getElementById("score-value").textContent = totalScore;
     }
 
-    function createDropdown(countryCode, layer) {
-      const select = document.createElement("select");
+    function createRadioOptions(countryCode, layer) {
+      const container = document.createElement("div");
 
       for (const status in colors) {
-        const option = document.createElement("option");
-        option.value = status;
-        option.textContent = status;
-        select.appendChild(option);
+        const label = document.createElement("label");
+
+        const radio = document.createElement("input");
+        radio.type = "radio";
+        radio.name = "travel-status-" + countryCode;
+        radio.value = status;
+
+        if (countryStatus[countryCode] === status) {
+          radio.checked = true;
+        }
+
+        radio.onchange = () => {
+          countryStatus[countryCode] = status;
+          layer.setStyle({
+            fillColor: colors[status],
+            fillOpacity: 0.8,
+            color: "#444",
+            weight: 1,
+          });
+          updateScore();
+        };
+
+        label.appendChild(radio);
+        label.appendChild(document.createTextNode(" " + status));
+        container.appendChild(label);
       }
 
-      select.value = countryStatus[countryCode] || "Never been here";
-
-      select.onchange = () => {
-        const status = select.value;
-        countryStatus[countryCode] = status;
-        layer.setStyle({
-          fillColor: colors[status],
-          fillOpacity: 0.8,
-          color: "#444",
-          weight: 1,
-        });
-        updateScore();
-      };
-
-      return select;
+      return container;
     }
 
     axios
@@ -109,7 +120,7 @@
         "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson"
       )
       .then((response) => {
-        const geojson = L.geoJSON(response.data, {
+        L.geoJSON(response.data, {
           style: {
             color: "#444",
             weight: 1,
@@ -118,15 +129,15 @@
           },
           onEachFeature: (feature, layer) => {
             const countryCode = feature.properties.ISO_A3;
-            const countryName = feature.properties.ADMIN || "Unknown";
+            const countryName = feature.properties.NAME || "Unknown";
             countryStatus[countryCode] = "Never been here";
 
             layer.on("click", () => {
               const popupDiv = L.DomUtil.create("div");
               popupDiv.innerHTML = `<strong>${countryName}</strong><br/>`;
 
-              const dropdown = createDropdown(countryCode, layer);
-              popupDiv.appendChild(dropdown);
+              const radioOptions = createRadioOptions(countryCode, layer);
+              popupDiv.appendChild(radioOptions);
 
               const popup = L.popup()
                 .setLatLng(layer.getBounds().getCenter())
