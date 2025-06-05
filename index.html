@@ -4,10 +4,7 @@
   <meta charset="UTF-8" />
   <title>Interactive Travel Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body {
       margin: 0;
@@ -20,7 +17,7 @@
       padding: 10px;
       font-size: 20px;
       text-align: center;
-      background: #f8f8f8;
+      background: #f0f0f0;
       border-bottom: 1px solid #ccc;
     }
     #map {
@@ -28,13 +25,11 @@
     }
     label {
       display: block;
-      cursor: pointer;
-      user-select: none;
       margin: 4px 0;
       font-size: 14px;
     }
     input[type="radio"] {
-      margin-right: 8px;
+      margin-right: 5px;
     }
   </style>
 </head>
@@ -46,7 +41,6 @@
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 
   <script>
-    // Define score and colors for statuses
     const scoreValues = {
       "Lived here": 5,
       "Extensively visited": 4,
@@ -65,39 +59,33 @@
       "Never been here": "white",
     };
 
-    const countryStatus = {}; // countryCode => status
-    let totalScore = 0;
-
-    const map = L.map("map").setView([20, 0], 2);
-
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "&copy; OpenStreetMap contributors",
-    }).addTo(map);
+    const countryStatus = {};
+    let map;
 
     function updateScore() {
-      totalScore = Object.values(countryStatus).reduce(
-        (acc, status) => acc + (scoreValues[status] || 0),
-        0
-      );
-      document.getElementById("score-value").textContent = totalScore;
+      let total = 0;
+      for (const key in countryStatus) {
+        total += scoreValues[countryStatus[key]] || 0;
+      }
+      document.getElementById("score-value").textContent = total;
     }
 
     function createRadioOptions(countryCode, layer) {
       const container = document.createElement("div");
 
-      for (const status in colors) {
+      for (const status in scoreValues) {
         const label = document.createElement("label");
 
-        const radio = document.createElement("input");
-        radio.type = "radio";
-        radio.name = "travel-status-" + countryCode;
-        radio.value = status;
+        const input = document.createElement("input");
+        input.type = "radio";
+        input.name = `status-${countryCode}`;
+        input.value = status;
 
         if (countryStatus[countryCode] === status) {
-          radio.checked = true;
+          input.checked = true;
         }
 
-        radio.onchange = () => {
+        input.addEventListener("change", () => {
           countryStatus[countryCode] = status;
           layer.setStyle({
             fillColor: colors[status],
@@ -106,64 +94,55 @@
             weight: 1,
           });
           updateScore();
-        };
+        });
 
-        label.appendChild(radio);
-        label.appendChild(document.createTextNode(" " + status));
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(status));
         container.appendChild(label);
       }
 
       return container;
     }
 
-    // Load GeoJSON and add to map
-    axios
-      .get(
-        "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson"
-      )
-      .then((response) => {
-        L.geoJSON(response.data, {
-          style: {
-            color: "#444",
-            weight: 1,
-            fillColor: "white",
-            fillOpacity: 0.8,
-          },
-          onEachFeature: (feature, layer) => {
-            const countryCode = feature.properties.ISO_A3;
+    function initMap() {
+      map = L.map("map").setView([20, 0], 2);
 
-            // Check what properties exist
-            // Uncomment for debugging:
-            // console.log(feature.properties);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors"
+      }).addTo(map);
 
-            const countryName =
-              feature.properties.NAME ||
-              feature.properties.ADMIN ||
-              "Unknown";
+      axios.get("https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson")
+        .then(response => {
+          L.geoJSON(response.data, {
+            style: {
+              color: "#444",
+              weight: 1,
+              fillColor: "white",
+              fillOpacity: 0.8,
+            },
+            onEachFeature: (feature, layer) => {
+              const countryCode = feature.properties.ISO_A3;
+              const countryName = feature.properties.ADMIN || "Unknown";
 
-            // Initialize status
-            countryStatus[countryCode] = "Never been here";
+              countryStatus[countryCode] = "Never been here";
 
-            layer.on("click", (e) => {
-              const popupDiv = L.DomUtil.create("div");
-              popupDiv.innerHTML = `<strong>${countryName}</strong><br/>`;
+              layer.on("click", function(e) {
+                const popupDiv = document.createElement("div");
+                popupDiv.innerHTML = `<strong>${countryName}</strong><br>`;
+                popupDiv.appendChild(createRadioOptions(countryCode, layer));
 
-              const radioOptions = createRadioOptions(countryCode, layer);
-              popupDiv.appendChild(radioOptions);
+                const popup = L.popup()
+                  .setLatLng(e.latlng)
+                  .setContent(popupDiv);
 
-              // Open popup at click location (e.latlng)
-              const popup = L.popup()
-                .setLatLng(e.latlng)
-                .setContent(popupDiv);
+                popup.openOn(map);
+              });
+            }
+          }).addTo(map);
+        });
+    }
 
-              map.openPopup(popup);
-            });
-          },
-        }).addTo(map);
-      })
-      .catch((error) => {
-        console.error("Failed to load country data:", error);
-      });
+    initMap();
   </script>
 </body>
 </html>
